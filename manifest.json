@@ -1,0 +1,12 @@
+[
+  {
+    "guid": "4a8b1c2d-3e4f-5a6b-7c8d-9e0f1a2b3c4d",
+    "name": "Streaming Discovery",
+    "description": "Browse and search external streaming services (Hulu, Netflix, Disney+, and more) directly inside Jellyfin. Powered by the TMDB Watch Providers API — no scraping, no DRM circumvention.",
+    "overview": "Surfaces streaming catalog content as a browsable Jellyfin library. Tap Play to launch the native streaming app at that exact title (Phase 2, requires compatible client).",
+    "owner": "thess510",
+    "category": "General",
+    "imageUrl": "",
+    "versions": []
+  }
+]

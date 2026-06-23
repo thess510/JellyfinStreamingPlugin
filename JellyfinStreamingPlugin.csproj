@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>JellyfinStreamingPlugin</AssemblyName>
+    <RootNamespace>JellyfinStreamingPlugin</RootNamespace>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <Description>Surfaces external streaming content (Hulu, Netflix, Disney+, etc.) inside Jellyfin as a browsable library.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Embed the admin config page HTML into the dll -->
+    <EmbeddedResource Include="Configuration/configPage.html" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Jellyfin SDK packages — referenced as PrivateAssets so they don't get bundled into the output dll -->
+    <PackageReference Include="Jellyfin.Model" Version="10.10.6" PrivateAssets="All" />
+    <PackageReference Include="MediaBrowser.Common" Version="10.10.6" PrivateAssets="All" />
+    <PackageReference Include="MediaBrowser.Controller" Version="10.10.6" PrivateAssets="All" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Core" Version="2.2.5" PrivateAssets="All" />
+
+    <!-- HTTP client for TMDB API calls -->
+    <PackageReference Include="System.Net.Http.Json" Version="8.0.1" />
+  </ItemGroup>
+
+</Project>
