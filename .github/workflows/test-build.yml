@@ -1,0 +1,31 @@
+name: Test Build
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build
+        run: |
+          dotnet restore JellyfinStreamingPlugin.csproj
+          dotnet publish JellyfinStreamingPlugin.csproj -c Release -o ./publish
+
+      - name: Upload DLL artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: JellyfinStreamingPlugin
+          path: ./publish/JellyfinStreamingPlugin.dll
+          retention-days: 7
