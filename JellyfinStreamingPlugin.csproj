@@ -15,18 +15,20 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Embed the admin config page HTML into the dll -->
     <EmbeddedResource Include="Configuration/configPage.html" />
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Jellyfin SDK packages — referenced as PrivateAssets so they don't get bundled into the output dll -->
-    <PackageReference Include="Jellyfin.Model" Version="10.10.6" PrivateAssets="All" />
-    <PackageReference Include="MediaBrowser.Common" Version="10.10.6" PrivateAssets="All" />
-    <PackageReference Include="MediaBrowser.Controller" Version="10.10.6" PrivateAssets="All" />
-    <PackageReference Include="Microsoft.AspNetCore.Mvc.Core" Version="2.2.5" PrivateAssets="All" />
+    <!-- Jellyfin SDK — ExcludeAssets="runtime" means we compile against these
+         but don't bundle them; Jellyfin provides them at runtime. -->
+    <PackageReference Include="Jellyfin.Model" Version="10.11.11">
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </PackageReference>
+    <PackageReference Include="Jellyfin.Controller" Version="10.11.11">
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </PackageReference>
 
-    <!-- HTTP client for TMDB API calls -->
+    <!-- HTTP client for TMDB API calls — included in output -->
     <PackageReference Include="System.Net.Http.Json" Version="8.0.1" />
   </ItemGroup>
 
