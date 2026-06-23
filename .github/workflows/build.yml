@@ -1,0 +1,108 @@
+name: Build and Publish Plugin
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'   # triggers on v1.0.0, v1.2.3, etc.
+
+permissions:
+  contents: write  # needed to create releases and push manifest updates back to main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── Checkout ────────────────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Full history so we can push back to main after updating manifest
+          fetch-depth: 0
+
+      # ── .NET setup ──────────────────────────────────────────────────────────
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      # ── Version extraction ───────────────────────────────────────────────────
+      # Tag: v1.2.3  →  VERSION=1.2.3  →  FULL_VERSION=1.2.3.0 (Jellyfin uses 4-part)
+      - name: Extract version from tag
+        id: version
+        run: |
+          TAG="${GITHUB_REF#refs/tags/v}"
+          echo "VERSION=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "FULL_VERSION=${TAG}.0" >> "$GITHUB_OUTPUT"
+          echo "ZIP_NAME=JellyfinStreamingPlugin_${TAG}.zip" >> "$GITHUB_OUTPUT"
+
+      # ── Build ────────────────────────────────────────────────────────────────
+      - name: Restore & Build
+        run: |
+          dotnet restore JellyfinStreamingPlugin.csproj
+          dotnet publish JellyfinStreamingPlugin.csproj \
+            -c Release \
+            /p:Version=${{ steps.version.outputs.VERSION }} \
+            -o ./publish
+
+      # ── Package ──────────────────────────────────────────────────────────────
+      # Zip only the plugin DLL — Jellyfin supplies all SDK assemblies at runtime.
+      # If we ever add non-Jellyfin dependencies, include them here too.
+      - name: Create release zip
+        run: |
+          cd publish
+          zip -j ../${{ steps.version.outputs.ZIP_NAME }} JellyfinStreamingPlugin.dll
+
+      # ── Checksum ─────────────────────────────────────────────────────────────
+      # Jellyfin verifies the MD5 checksum from manifest.json against the downloaded zip.
+      - name: Calculate MD5 checksum
+        id: checksum
+        run: |
+          HASH=$(md5sum ${{ steps.version.outputs.ZIP_NAME }} | awk '{print $1}')
+          echo "MD5=${HASH}" >> "$GITHUB_OUTPUT"
+
+      # ── GitHub Release ───────────────────────────────────────────────────────
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.version.outputs.ZIP_NAME }}
+          generate_release_notes: true
+          name: "v${{ steps.version.outputs.VERSION }}"
+
+      # ── Update manifest.json ─────────────────────────────────────────────────
+      # Prepend the new version entry so manifest.json always lists newest first.
+      # Jellyfin shows all versions and lets users pick; newest-first is correct.
+      - name: Update manifest.json
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          FULL_VERSION="${{ steps.version.outputs.FULL_VERSION }}"
+          CHECKSUM="${{ steps.checksum.outputs.MD5 }}"
+          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          REPO="${{ github.repository }}"
+          SOURCE_URL="https://github.com/${REPO}/releases/download/v${VERSION}/${{ steps.version.outputs.ZIP_NAME }}"
+
+          jq \
+            --arg version  "$FULL_VERSION" \
+            --arg checksum "$CHECKSUM" \
+            --arg timestamp "$TIMESTAMP" \
+            --arg sourceUrl "$SOURCE_URL" \
+            '.[0].versions = [{
+              "version":   $version,
+              "changelog": "See release notes: https://github.com/'"${REPO}"'/releases",
+              "targetAbi": "10.10.0.0",
+              "sourceUrl": $sourceUrl,
+              "checksum":  $checksum,
+              "timestamp": $timestamp
+            }] + .[0].versions' \
+            manifest.json > manifest.tmp && mv manifest.tmp manifest.json
+
+      # ── Commit manifest back to main ─────────────────────────────────────────
+      # This keeps the manifest in-repo so the raw GitHub URL always serves
+      # the latest version list without needing GitHub Pages.
+      - name: Commit updated manifest.json
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add manifest.json
+          git commit -m "ci: update manifest for v${{ steps.version.outputs.VERSION }} [skip ci]"
+          git push origin HEAD:main
