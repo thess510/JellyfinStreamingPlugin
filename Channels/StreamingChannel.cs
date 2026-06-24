@@ -23,9 +23,6 @@ public class StreamingChannel : IChannel, IHasCacheKey
     private readonly ILogger<StreamingChannel> _logger;
     private readonly TmdbService _tmdbService;
 
-    // In-memory cache of the last sync result.
-    // The background task (SyncStreamingContentTask) populates this.
-    // On first load before any sync, we return empty or trigger a sync.
     private static List<StreamingItem> _cachedItems = new();
     private static DateTime _lastCacheUpdate = DateTime.MinValue;
 
@@ -44,11 +41,15 @@ public class StreamingChannel : IChannel, IHasCacheKey
 
     public string DataVersion => "1";
 
+    /// <summary>
+    /// Required by IChannel in Jellyfin 10.11+.
+    /// </summary>
+    public string HomePageUrl => "https://www.themoviedb.org";
+
     // ── IHasCacheKey ──────────────────────────────────────────────────────────
 
-    // Cache key changes when the cached item list changes — Jellyfin uses this
-    // to know when to invalidate its own channel item cache.
-    public string GetCacheKey(string userId) =>
+    // Signature uses string? to match the interface definition in 10.11.
+    public string GetCacheKey(string? userId) =>
         $"streaming-channel-{_lastCacheUpdate:yyyyMMddHHmm}";
 
     // ── Channel capabilities ──────────────────────────────────────────────────
@@ -66,11 +67,8 @@ public class StreamingChannel : IChannel, IHasCacheKey
             },
             MediaTypes = new List<ChannelMediaType>
             {
-                // We're not providing playable media — Phase 2 deep-links handle playback.
-                // For now, declare as video so Jellyfin treats items correctly.
                 ChannelMediaType.Video
             },
-            // Allow Jellyfin to sort and filter our channel items
             SupportsSortOrderToggle = true,
             SupportsLatestMedia = true,
             CanFilter = false
@@ -81,7 +79,6 @@ public class StreamingChannel : IChannel, IHasCacheKey
 
     public Task<DynamicImageResponse> GetChannelImage(ImageType type, CancellationToken cancellationToken)
     {
-        // No custom channel image for now — Jellyfin will use a default.
         return Task.FromResult(new DynamicImageResponse { HasImage = false });
     }
 
@@ -92,10 +89,6 @@ public class StreamingChannel : IChannel, IHasCacheKey
 
     public bool IsEnabledFor(string userId) => true;
 
-    /// <summary>
-    /// Called by Jellyfin to get the list of items for browsing.
-    /// We return our cached TMDB results, converted to ChannelItemInfo.
-    /// </summary>
     public Task<ChannelItemResult> GetChannelItems(InternalChannelItemQuery query, CancellationToken cancellationToken)
     {
         _logger.LogDebug("StreamingChannel.GetChannelItems called, cache has {Count} items", _cachedItems.Count);
@@ -111,18 +104,15 @@ public class StreamingChannel : IChannel, IHasCacheKey
 
         foreach (var si in _cachedItems)
         {
-            // Filter to only items available on an enabled service
             var matchingProviders = si.Providers.Where(p => enabledIds.Contains(p.ProviderId)).ToList();
             if (matchingProviders.Count == 0) continue;
 
-            // Filter by content type config
             if (si.MediaType == "movie" && !config.IncludeMovies) continue;
             if (si.MediaType == "tv" && !config.IncludeTvShows) continue;
 
             items.Add(MapToChannelItem(si, matchingProviders));
         }
 
-        // Apply paging
         var paged = items
             .Skip(query.StartIndex ?? 0)
             .Take(query.Limit ?? items.Count)
@@ -135,7 +125,7 @@ public class StreamingChannel : IChannel, IHasCacheKey
         });
     }
 
-    // ── Cache management (called by SyncStreamingContentTask) ─────────────────
+    // ── Cache management ──────────────────────────────────────────────────────
 
     public static void UpdateCache(List<StreamingItem> items)
     {
@@ -156,44 +146,31 @@ public class StreamingChannel : IChannel, IHasCacheKey
 
         var item = new ChannelItemInfo
         {
-            // Use a stable ID: "streaming-{tmdbId}-{mediaType}"
             Id = $"streaming-{si.TmdbId}-{si.MediaType}",
             Name = si.Title,
             Overview = si.Overview,
             Type = ChannelItemType.Media,
             ContentType = contentType,
             HomePageUrl = providers.FirstOrDefault()?.WebUrl,
-
-            // CommunityRating maps to TMDB vote average
             CommunityRating = si.VoteAverage > 0 ? (float)si.VoteAverage : null,
-
-            // Store provider info in the item's tag line for display in clients
-            // that show it (web UI does; Neptune may differ)
             Tagline = $"Streaming on: {providerSummary}",
-
-            // Provider logos for display
             ProviderIds = new Dictionary<string, string>
             {
                 ["tmdb"] = si.TmdbId.ToString()
             }
         };
 
-        // Attach poster image
         if (!string.IsNullOrEmpty(si.FullPosterUrl))
         {
             item.ImageUrl = si.FullPosterUrl;
             item.HasImage = true;
         }
 
-        // Attach production year
         if (si.ReleaseYear.HasValue)
         {
             item.ProductionYear = si.ReleaseYear.Value;
         }
 
-        // Store the streaming provider list in a way the custom API endpoint can retrieve it.
-        // We encode this as a special tag that StreamingController reads back.
-        // Format: "streaming:15,8,337" (comma-separated provider IDs)
         item.Tags = new List<string>
         {
             $"streaming-providers:{string.Join(",", providers.Select(p => p.ProviderId))}",
