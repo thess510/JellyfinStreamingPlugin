@@ -11,13 +11,6 @@ using Microsoft.Extensions.Logging;
 
 namespace JellyfinStreamingPlugin.Channels;
 
-/// <summary>
-/// Implements the Jellyfin Channels API to expose streaming catalog content
-/// as a browsable virtual library. This is the correct primitive for non-local content —
-/// it doesn't need filesystem paths like a virtual library would.
-///
-/// Jellyfin discovers this via DI — it must be registered as IChannel.
-/// </summary>
 public class StreamingChannel : IChannel, IHasCacheKey
 {
     private readonly ILogger<StreamingChannel> _logger;
@@ -32,8 +25,6 @@ public class StreamingChannel : IChannel, IHasCacheKey
         _tmdbService = tmdbService;
     }
 
-    // ── IChannel identity ─────────────────────────────────────────────────────
-
     public string Name => "Streaming Discovery";
 
     public string Description =>
@@ -41,18 +32,10 @@ public class StreamingChannel : IChannel, IHasCacheKey
 
     public string DataVersion => "1";
 
-    /// <summary>
-    /// Required by IChannel in Jellyfin 10.11+.
-    /// </summary>
     public string HomePageUrl => "https://www.themoviedb.org";
 
-    // ── IHasCacheKey ──────────────────────────────────────────────────────────
-
-    // Signature uses string? to match the interface definition in 10.11.
     public string GetCacheKey(string? userId) =>
         $"streaming-channel-{_lastCacheUpdate:yyyyMMddHHmm}";
-
-    // ── Channel capabilities ──────────────────────────────────────────────────
 
     public ChannelParentalRating ParentalRating => ChannelParentalRating.GeneralAudience;
 
@@ -68,14 +51,9 @@ public class StreamingChannel : IChannel, IHasCacheKey
             MediaTypes = new List<ChannelMediaType>
             {
                 ChannelMediaType.Video
-            },
-            SupportsSortOrderToggle = true,
-            SupportsLatestMedia = true,
-            CanFilter = false
+            }
         };
     }
-
-    // ── Channel items ─────────────────────────────────────────────────────────
 
     public Task<DynamicImageResponse> GetChannelImage(ImageType type, CancellationToken cancellationToken)
     {
@@ -125,8 +103,6 @@ public class StreamingChannel : IChannel, IHasCacheKey
         });
     }
 
-    // ── Cache management ──────────────────────────────────────────────────────
-
     public static void UpdateCache(List<StreamingItem> items)
     {
         _cachedItems = items;
@@ -135,8 +111,6 @@ public class StreamingChannel : IChannel, IHasCacheKey
 
     public static IReadOnlyList<StreamingItem> GetCachedItems() => _cachedItems.AsReadOnly();
 
-    // ── Mapping ───────────────────────────────────────────────────────────────
-
     private static ChannelItemInfo MapToChannelItem(StreamingItem si, List<WatchProvider> providers)
     {
         var providerSummary = string.Join(", ", providers.Select(p => p.Name));
@@ -144,39 +118,37 @@ public class StreamingChannel : IChannel, IHasCacheKey
             ? ChannelMediaContentType.Movie
             : ChannelMediaContentType.Episode;
 
+        // Append streaming info to overview since Tagline was removed in 10.11
+        var overview = string.IsNullOrEmpty(si.Overview)
+            ? $"Streaming on: {providerSummary}"
+            : $"{si.Overview}\n\nStreaming on: {providerSummary}";
+
         var item = new ChannelItemInfo
         {
             Id = $"streaming-{si.TmdbId}-{si.MediaType}",
             Name = si.Title,
-            Overview = si.Overview,
+            Overview = overview,
             Type = ChannelItemType.Media,
             ContentType = contentType,
             HomePageUrl = providers.FirstOrDefault()?.WebUrl,
             CommunityRating = si.VoteAverage > 0 ? (float)si.VoteAverage : null,
-            Tagline = $"Streaming on: {providerSummary}",
+            ImageUrl = string.IsNullOrEmpty(si.FullPosterUrl) ? null : si.FullPosterUrl,
             ProviderIds = new Dictionary<string, string>
             {
                 ["tmdb"] = si.TmdbId.ToString()
+            },
+            Tags = new List<string>
+            {
+                $"streaming-providers:{string.Join(",", providers.Select(p => p.ProviderId))}",
+                $"streaming-tmdb:{si.TmdbId}",
+                $"streaming-type:{si.MediaType}"
             }
         };
-
-        if (!string.IsNullOrEmpty(si.FullPosterUrl))
-        {
-            item.ImageUrl = si.FullPosterUrl;
-            item.HasImage = true;
-        }
 
         if (si.ReleaseYear.HasValue)
         {
             item.ProductionYear = si.ReleaseYear.Value;
         }
-
-        item.Tags = new List<string>
-        {
-            $"streaming-providers:{string.Join(",", providers.Select(p => p.ProviderId))}",
-            $"streaming-tmdb:{si.TmdbId}",
-            $"streaming-type:{si.MediaType}"
-        };
 
         return item;
     }
