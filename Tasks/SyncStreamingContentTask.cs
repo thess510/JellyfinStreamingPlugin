@@ -31,7 +31,7 @@ public class SyncStreamingContentTask : IScheduledTask
             new TaskTriggerInfo
             {
                 // Use the string literal — TriggerInterval constant was removed in 10.11
-                Type = "Interval",
+                Type = TaskTriggerInfoType.Interval,
                 IntervalTicks = TimeSpan.FromHours(intervalHours).Ticks
             }
         };
