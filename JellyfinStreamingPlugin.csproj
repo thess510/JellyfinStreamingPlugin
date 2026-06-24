@@ -3,7 +3,7 @@
   <PropertyGroup>
     <AssemblyName>JellyfinStreamingPlugin</AssemblyName>
     <RootNamespace>JellyfinStreamingPlugin</RootNamespace>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net9.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
@@ -29,7 +29,7 @@
     </PackageReference>
 
     <!-- HTTP client for TMDB API calls — included in output -->
-    <PackageReference Include="System.Net.Http.Json" Version="8.0.1" />
+    <PackageReference Include="System.Net.Http.Json" Version="9.0.0" />
   </ItemGroup>
 
 </Project>
