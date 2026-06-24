@@ -2,7 +2,6 @@ using JellyfinStreamingPlugin.Channels;
 using JellyfinStreamingPlugin.Models;
 using JellyfinStreamingPlugin.Services;
 using MediaBrowser.Controller.Net;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -20,7 +19,7 @@ namespace JellyfinStreamingPlugin.Api;
 /// </summary>
 [ApiController]
 [Route("StreamingPlugin")]
-[Authorize(Policy = "DefaultAuthorization")]
+
 public class StreamingController : ControllerBase
 {
     private readonly ILogger<StreamingController> _logger;
